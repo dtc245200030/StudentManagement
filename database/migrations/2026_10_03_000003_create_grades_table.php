@@ -13,7 +13,7 @@ return new class extends Migration
             // Khóa ngoại liên kết tới bảng students
             $table->foreignId('student_id')->constrained('students')->onDelete('cascade');
             $table->string('subject_name'); // Tên môn học
-            $table->float('score');          // Điểm số (Hệ 10)
+            $table->decimal('score', 4, 2);  // Điểm số (Hệ 10), tránh sai số float
             $table->timestamps();
         });
     }

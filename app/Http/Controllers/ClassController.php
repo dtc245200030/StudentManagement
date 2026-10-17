@@ -10,23 +10,26 @@ class ClassController extends Controller
     public function index()
     {
         $classes = StudentClass::all();
+
         return view('classes.index', compact('classes'));
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'class_code' => 'required|unique:student_classes',
-            'class_name' => 'required',
+        $validated = $request->validate([
+            'class_code' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/', 'unique:student_classes,class_code'],
+            'class_name' => ['required', 'string', 'max:255'],
         ]);
 
-        StudentClass::create($request->all());
+        StudentClass::create($validated);
+
         return redirect()->back()->with('success', 'Thêm lớp học thành công!');
     }
 
-    public function destroy($id)
+    public function destroy(StudentClass $class)
     {
-        StudentClass::destroy($id);
+        $class->delete();
+
         return redirect()->back()->with('success', 'Xóa lớp học thành công!');
     }
 }

@@ -1,26 +1,49 @@
+# syntax=docker/dockerfile:1.7
+FROM node:24-alpine AS frontend
+WORKDIR /build
+COPY package.json ./
+COPY pnpm-lock.yaml ./
+RUN corepack enable \
+    && pnpm install --frozen-lockfile --ignore-scripts
+COPY vite.config.js ./
+COPY resources ./resources
+RUN pnpm run build
+
+FROM composer:2.8 AS vendor
+WORKDIR /build
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --prefer-dist \
+    --optimize-autoloader \
+    --classmap-authoritative \
+    --no-scripts
+
 FROM php:8.3-fpm-alpine
 
-# 1. Cài đặt các thư viện hệ thống & extension MySQL cho PHP
-RUN apk add --no-cache \
-    zip unzip libpng-dev libzip-dev \
-    && docker-php-ext-install pdo pdo_mysql bcmath zip
-
-# 2. Lấy Composer chính thức từ Docker Hub
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+RUN apk add --no-cache libzip libpng icu-libs fcgi \
+    && apk add --no-cache --virtual .build-deps libzip-dev libpng-dev icu-dev \
+    && docker-php-ext-install -j"$(nproc)" pdo_mysql bcmath zip intl opcache \
+    && apk del .build-deps \
+    && mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
 
 WORKDIR /var/www/html
 
-# 3. Copy toàn bộ mã nguồn Laravel vào Container
-COPY . .
+COPY --chown=www-data:www-data . .
+COPY --from=vendor --chown=www-data:www-data /build/vendor ./vendor
+COPY --from=frontend --chown=www-data:www-data /build/public/build ./public/build
+COPY docker/php.ini "$PHP_INI_DIR/conf.d/99-production.ini"
+COPY docker/www.conf /usr/local/etc/php-fpm.d/zz-app.conf
 
-# 4. Cài đặt các thư viện PHP
-RUN composer install --no-dev --optimize-autoloader
+RUN mkdir -p storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && php artisan package:discover --ansi \
+    && php artisan view:cache \
+    && php artisan event:cache
 
-# 5. Phân quyền cho thư mục storage và bootstrap/cache của Laravel
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-
-# 6. HARDENING: Chạy Container bằng user non-root (www-data)
 USER www-data
 
 EXPOSE 9000
-CMD ["php-fpm"]
+CMD ["sh", "-c", "php artisan config:cache && exec php-fpm -F"]

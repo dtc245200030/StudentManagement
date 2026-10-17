@@ -12,24 +12,27 @@ class StudentController extends Controller
     {
         $students = Student::with('studentClass')->get();
         $classes = StudentClass::all();
+
         return view('students.index', compact('students', 'classes'));
     }
 
     public function store(Request $request)
     {
-        $request->validate([
-            'student_code' => 'required|unique:students',
-            'fullname'     => 'required',
-            'class_id'     => 'required|exists:student_classes,id',
+        $validated = $request->validate([
+            'student_code' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_-]+$/', 'unique:students,student_code'],
+            'fullname' => ['required', 'string', 'max:255'],
+            'class_id' => ['required', 'integer', 'exists:student_classes,id'],
         ]);
 
-        Student::create($request->all());
+        Student::create($validated);
+
         return redirect()->back()->with('success', 'Thêm sinh viên thành công!');
     }
 
-    public function destroy($id)
+    public function destroy(Student $student)
     {
-        Student::destroy($id);
+        $student->delete();
+
         return redirect()->back()->with('success', 'Xóa sinh viên thành công!');
     }
 }

@@ -1,5 +1,7 @@
 vendor/
 .env
 node_modules/
+public/build/
 bootstrap/cache/*.php
 storage/*.key
+.phpunit.result.cache
